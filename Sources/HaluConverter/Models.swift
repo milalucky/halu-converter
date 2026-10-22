@@ -2,12 +2,24 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum FileKind: Hashable {
-    case image, pdf, video, audio, other
+    case image, pdf, video, audio, document, presentation, spreadsheet, archive, subtitle, folder, other
+
+    private static let byExtension: [String: FileKind] = {
+        var map: [String: FileKind] = [:]
+        for ext in ["doc", "docx", "rtf", "rtfd", "odt", "txt", "md", "markdown", "html", "htm", "pages"] { map[ext] = .document }
+        for ext in ["ppt", "pptx", "key", "odp"] { map[ext] = .presentation }
+        for ext in ["xls", "xlsx", "csv", "tsv", "numbers", "ods"] { map[ext] = .spreadsheet }
+        for ext in ["zip", "tar", "gz", "tgz", "bz2", "xz", "rar", "7z"] { map[ext] = .archive }
+        for ext in ["srt", "vtt"] { map[ext] = .subtitle }
+        return map
+    }()
 
     init(url: URL) {
-        let type = (try? url.resourceValues(forKeys: [.contentTypeKey]).contentType)
-            ?? UTType(filenameExtension: url.pathExtension)
-        guard let type else { self = .other; return }
+        // Extensions first: iWork files are folders (packages) and Office files have vague UTTypes.
+        if let kind = Self.byExtension[url.pathExtension.lowercased()] { self = kind; return }
+        let values = try? url.resourceValues(forKeys: [.contentTypeKey, .isDirectoryKey, .isPackageKey])
+        if values?.isDirectory == true && values?.isPackage != true { self = .folder; return }
+        guard let type = values?.contentType ?? UTType(filenameExtension: url.pathExtension) else { self = .other; return }
         if type.conforms(to: .pdf) { self = .pdf }
         else if type.conforms(to: .image) { self = .image }
         else if type.conforms(to: .movie) || type.conforms(to: .video) { self = .video }
@@ -21,6 +33,12 @@ enum FileKind: Hashable {
         case .pdf: "PDF"
         case .video: "video"
         case .audio: "audio"
+        case .document: "document"
+        case .presentation: "presentation"
+        case .spreadsheet: "spreadsheet"
+        case .archive: "archive"
+        case .subtitle: "subtitle"
+        case .folder: "folder"
         case .other: "file"
         }
     }
@@ -35,7 +53,7 @@ struct InputFile: Identifiable, Hashable {
     init(url: URL) {
         self.url = url
         self.kind = FileKind(url: url)
-        self.size = Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        self.size = Int64((try? url.resourceValues(forKeys: [.totalFileAllocatedSizeKey, .fileSizeKey]).fileSize) ?? 0)
     }
 }
 
@@ -51,6 +69,9 @@ enum Tool: String, CaseIterable, Identifiable {
     case mergePDF, splitPDF, compressPDF, pdfToImages
     case compressVideo, convertVideo, videoToGIF, extractAudio
     case convertAudio
+    case convertDocument, convertPresentation, convertSpreadsheet
+    case makeArchive, extractArchive
+    case convertSubtitle
 
     var id: String { rawValue }
 
@@ -67,6 +88,12 @@ enum Tool: String, CaseIterable, Identifiable {
         case .videoToGIF: "Video to GIF"
         case .extractAudio: "Extract Audio"
         case .convertAudio: "Convert Audio"
+        case .convertDocument: "Convert Document"
+        case .convertPresentation: "Convert Slides"
+        case .convertSpreadsheet: "Convert Spreadsheet"
+        case .makeArchive: "Make Archive"
+        case .extractArchive: "Extract Archive"
+        case .convertSubtitle: "Convert Subtitles"
         }
     }
 
@@ -82,7 +109,13 @@ enum Tool: String, CaseIterable, Identifiable {
         case .convertVideo: "MP4 ⇄ MOV"
         case .videoToGIF: "Animated, looping GIF"
         case .extractAudio: "Save soundtrack as M4A"
-        case .convertAudio: "M4A, WAV, AIFF, CAF"
+        case .convertAudio: "M4A, WAV, FLAC, ALAC…"
+        case .convertDocument: "DOCX, Pages, PDF, RTF…"
+        case .convertPresentation: "PPTX, Keynote, PDF"
+        case .convertSpreadsheet: "XLSX, Numbers, CSV"
+        case .makeArchive: "ZIP or TAR.GZ"
+        case .extractArchive: "ZIP, RAR, 7Z, TAR…"
+        case .convertSubtitle: "SRT ⇄ VTT, TXT"
         }
     }
 
@@ -99,27 +132,34 @@ enum Tool: String, CaseIterable, Identifiable {
         case .videoToGIF: "sparkles.tv"
         case .extractAudio: "waveform"
         case .convertAudio: "music.note"
+        case .convertDocument: "doc.text"
+        case .convertPresentation: "rectangle.on.rectangle.angled"
+        case .convertSpreadsheet: "tablecells"
+        case .makeArchive: "archivebox"
+        case .extractArchive: "shippingbox.and.arrow.backward"
+        case .convertSubtitle: "captions.bubble"
         }
     }
 
     var tint: Color {
         switch category {
-        case .convert: .blue
-        case .compress: .green
-        case .organize: .orange
+        case .convert: .halu
+        case .compress: .haluMint
+        case .organize: .haluViolet
         }
     }
 
     var category: ToolCategory {
         switch self {
-        case .convertImage, .pdfToImages, .convertVideo, .videoToGIF, .extractAudio, .convertAudio: .convert
-        case .compressImage, .compressPDF, .compressVideo: .compress
-        case .mergePDF, .splitPDF: .organize
+        case .convertImage, .pdfToImages, .convertVideo, .videoToGIF, .extractAudio, .convertAudio,
+             .convertDocument, .convertPresentation, .convertSpreadsheet, .convertSubtitle: .convert
+        case .compressImage, .compressPDF, .compressVideo, .makeArchive: .compress
+        case .mergePDF, .splitPDF, .extractArchive: .organize
         }
     }
 
     /// Batch tools consume all inputs at once and produce a single result.
-    var isBatch: Bool { self == .mergePDF }
+    var isBatch: Bool { self == .mergePDF || self == .makeArchive }
 
     func accepts(_ files: [InputFile]) -> Bool {
         guard !files.isEmpty else { return false }
@@ -135,6 +175,18 @@ enum Tool: String, CaseIterable, Identifiable {
             return kinds == [.video]
         case .convertAudio:
             return kinds == [.audio]
+        case .convertDocument:
+            return kinds == [.document]
+        case .convertPresentation:
+            return kinds == [.presentation]
+        case .convertSpreadsheet:
+            return kinds == [.spreadsheet]
+        case .makeArchive:
+            return !kinds.contains(.other)
+        case .extractArchive:
+            return kinds == [.archive]
+        case .convertSubtitle:
+            return kinds == [.subtitle]
         }
     }
 }
@@ -175,6 +227,11 @@ struct ToolSettings {
     var gifFPS: Double = 12
     var gifWidth: Double = 480
     var audioFormat: AudioFormat = .m4a
+    var documentFormat: DocumentFormat = .pdf
+    var slidesFormat: SlidesFormat = .pdf
+    var sheetFormat: SheetFormat = .xlsx
+    var archiveFormat: ArchiveFormat = .zip
+    var subtitleFormat: SubtitleFormat = .srt
 }
 
 enum HaluError: LocalizedError {

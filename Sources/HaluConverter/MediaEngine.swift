@@ -45,9 +45,10 @@ enum VideoContainer: String, CaseIterable, Identifiable {
 }
 
 enum AudioFormat: String, CaseIterable, Identifiable {
-    case m4a, wav, aiff, caf
+    case m4a, flac, alac, wav, aiff, caf
     var id: String { rawValue }
     var label: String { rawValue.uppercased() }
+    var fileExtension: String { self == .alac ? "m4a" : rawValue }
 }
 
 enum MediaEngine {
@@ -112,8 +113,8 @@ enum MediaEngine {
     }
 
     static func convertAudio(_ url: URL, to format: AudioFormat, outputDir: URL?, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
-        let sameExt = url.pathExtension.lowercased() == format.rawValue
-        let output = OutputNamer.file(for: url, suffix: sameExt ? "-converted" : "", ext: format.rawValue, in: outputDir)
+        let sameExt = url.pathExtension.lowercased() == format.fileExtension
+        let output = OutputNamer.file(for: url, suffix: sameExt ? "-converted" : "", ext: format.fileExtension, in: outputDir)
         if format == .m4a {
             try await export(AVURLAsset(url: url), preset: AVAssetExportPresetAppleM4A, fileType: .m4a, to: output, progress: progress)
             return output
@@ -121,16 +122,24 @@ enum MediaEngine {
 
         let input: AVAudioFile
         do { input = try AVAudioFile(forReading: url) } catch { throw HaluError.unreadable(url) }
+        let target = format
         let format = input.processingFormat
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatLinearPCM,
+        var settings: [String: Any] = [
             AVSampleRateKey: format.sampleRate,
             AVNumberOfChannelsKey: format.channelCount,
-            AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsFloatKey: false,
-            AVLinearPCMIsBigEndianKey: output.pathExtension == "aiff",
-            AVLinearPCMIsNonInterleaved: false,
         ]
+        switch target {
+        case .flac, .alac:
+            // Lossless: FLAC and Apple Lossless are encoded by Core Audio.
+            settings[AVFormatIDKey] = target == .flac ? kAudioFormatFLAC : kAudioFormatAppleLossless
+            settings[AVEncoderBitDepthHintKey] = 16
+        default:
+            settings[AVFormatIDKey] = kAudioFormatLinearPCM
+            settings[AVLinearPCMBitDepthKey] = 16
+            settings[AVLinearPCMIsFloatKey] = false
+            settings[AVLinearPCMIsBigEndianKey] = target == .aiff
+            settings[AVLinearPCMIsNonInterleaved] = false
+        }
         let out = try AVAudioFile(forWriting: output, settings: settings, commonFormat: format.commonFormat, interleaved: format.isInterleaved)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 65_536) else { throw HaluError.writeFailed(output) }
         while input.framePosition < input.length {

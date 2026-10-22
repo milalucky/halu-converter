@@ -3,6 +3,9 @@ import SwiftUI
 
 extension Color {
     static let halu = Color(red: 0.98, green: 0.47, blue: 0.20)
+    static let haluMint = Color(red: 0.20, green: 0.78, blue: 0.62)
+    static let haluViolet = Color(red: 0.55, green: 0.42, blue: 0.98)
+    static let haluPink = Color(red: 1.0, green: 0.36, blue: 0.52)
 }
 
 struct AppBadge: View {

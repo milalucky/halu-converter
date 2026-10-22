@@ -184,7 +184,49 @@ struct OptionsCard: View {
                 .labelsHidden()
                 .frame(maxWidth: 300)
             }
-            hint(s.wrappedValue.audioFormat == .m4a ? "AAC, small and widely supported." : "Uncompressed 16-bit PCM.")
+            hint(audioHint(s.wrappedValue.audioFormat))
+
+        case .convertDocument:
+            formatRow(selection: s.documentFormat, cases: DocumentFormat.allCases, label: \.label)
+            hint("Pages files and Word-to-PDF go through Pages for the best layout. Everything else converts instantly.")
+
+        case .convertPresentation:
+            formatRow(selection: s.slidesFormat, cases: SlidesFormat.allCases, label: \.label)
+            hint("Uses Keynote in the background. Slide images are saved into a folder.")
+
+        case .convertSpreadsheet:
+            formatRow(selection: s.sheetFormat, cases: SheetFormat.allCases, label: \.label)
+            hint("CSV ⇄ TSV converts instantly. Excel, Numbers and PDF go through Numbers.")
+
+        case .makeArchive:
+            formatRow(selection: s.archiveFormat, cases: ArchiveFormat.allCases, label: \.label)
+            hint(model.files.count > 1 ? "All files go into one archive." : "Folders are packed with everything inside.")
+
+        case .extractArchive:
+            hint("Each archive is extracted into its own folder next to it.")
+
+        case .convertSubtitle:
+            formatRow(selection: s.subtitleFormat, cases: SubtitleFormat.allCases, label: \.label)
+            hint("TXT keeps only the spoken lines, without timings.")
+        }
+    }
+
+    private func audioHint(_ format: AudioFormat) -> String {
+        switch format {
+        case .m4a: "AAC, small and widely supported."
+        case .flac, .alac: "Lossless: same sound as the original, about half the size of WAV."
+        default: "Uncompressed 16-bit PCM."
+        }
+    }
+
+    private func formatRow<T: Hashable & Identifiable>(selection: Binding<T>, cases: [T], label: KeyPath<T, String>) -> some View {
+        GridRow {
+            Text("Format").foregroundStyle(.secondary)
+            Picker("", selection: selection) {
+                ForEach(cases) { Text($0[keyPath: label]).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
         }
     }
 

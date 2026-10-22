@@ -171,6 +171,18 @@ enum Processor {
             return [try await MediaEngine.extractAudio(url, outputDir: outputDir, progress: progress)]
         case .convertAudio:
             return [try await MediaEngine.convertAudio(url, to: s.audioFormat, outputDir: outputDir, progress: progress)]
+        case .convertDocument:
+            return [try await DocumentEngine.convert(url, to: s.documentFormat, outputDir: outputDir)]
+        case .convertPresentation:
+            return try await DocumentEngine.convertSlides(url, to: s.slidesFormat, outputDir: outputDir)
+        case .convertSpreadsheet:
+            return [try await DocumentEngine.convertSheet(url, to: s.sheetFormat, outputDir: outputDir)]
+        case .makeArchive:
+            return [try await ArchiveEngine.make(inputs, format: s.archiveFormat, outputDir: outputDir)]
+        case .extractArchive:
+            return try await ArchiveEngine.extract(url, outputDir: outputDir)
+        case .convertSubtitle:
+            return [try SubtitleEngine.convert(url, to: s.subtitleFormat, outputDir: outputDir)]
         }
     }
 }
