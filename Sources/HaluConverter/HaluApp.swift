@@ -108,6 +108,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated { WheelController.shared.show(for: urls, at: NSEvent.mouseLocation, mode: .click) }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated { IWorkLifecycle.shared.quitAllNow() }
+    }
+
     /// The app keeps running in the menu bar so the wheel works with no window open.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 

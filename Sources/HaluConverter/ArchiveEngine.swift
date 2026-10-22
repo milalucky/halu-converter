@@ -114,19 +114,26 @@ enum SubtitleEngine {
 enum Shell {
     /// Runs a tool without blocking, throwing its stderr on failure.
     static func run(_ executable: String, _ arguments: [String], in directory: URL? = nil) async throws {
+        _ = try await output(executable, arguments, in: directory)
+    }
+
+    /// Like `run`, returning the tool's trimmed stdout.
+    static func output(_ executable: String, _ arguments: [String], in directory: URL? = nil) async throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         if let directory { process.currentDirectoryURL = directory }
         let errors = Pipe()
+        let output = Pipe()
         process.standardError = errors
-        process.standardOutput = FileHandle.nullDevice
+        process.standardOutput = output
 
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
             process.terminationHandler = { process in
                 let data = errors.fileHandleForReading.readDataToEndOfFile()
+                let stdout = output.fileHandleForReading.readDataToEndOfFile()
                 if process.terminationStatus == 0 {
-                    continuation.resume()
+                    continuation.resume(returning: String(decoding: stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))
                 } else {
                     let message = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
                     continuation.resume(throwing: HaluError.failed(message.isEmpty ? "\(executable) failed (\(process.terminationStatus))." : message))

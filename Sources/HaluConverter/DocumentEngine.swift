@@ -251,8 +251,9 @@ enum IWork {
             close d saving no
         end tell
         """
+        await IWorkLifecycle.shared.begin(app)
         do {
-            try await launchHidden(app)
+            if try await launchHidden(app) { await IWorkLifecycle.shared.markLaunchedByUs(app) }
             do {
                 try await Shell.run("/usr/bin/osascript", ["-e", script])
             } catch where error.localizedDescription.contains("(-600)") {
@@ -260,7 +261,9 @@ enum IWork {
                 try await Task.sleep(for: .seconds(2))
                 try await Shell.run("/usr/bin/osascript", ["-e", script])
             }
+            await IWorkLifecycle.shared.end(app)
         } catch {
+            await IWorkLifecycle.shared.end(app)
             let message = error.localizedDescription
             if message.contains("-1743") || message.localizedCaseInsensitiveContains("not authorized") {
                 throw HaluError.failed("Allow Halu Converter to control \(app.rawValue) in System Settings → Privacy & Security → Automation.")
@@ -274,11 +277,12 @@ enum IWork {
 
     /// Starts the app behind other windows and waits until it can take commands.
     /// Not hidden: Pages stalls on documents opened while hidden.
-    private static func launchHidden(_ app: App) async throws {
+    /// Returns true if this call started the app (so Halu may quit it later).
+    private static func launchHidden(_ app: App) async throws -> Bool {
         if let running = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).first, running.isFinishedLaunching {
-            return
+            return false
         }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleID) else { return }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleID) else { return false }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
         let running = try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
@@ -286,10 +290,66 @@ enum IWork {
             try await Task.sleep(for: .milliseconds(200))
         }
         try await Task.sleep(for: .milliseconds(600))
+        return true
     }
 
-    private static func quoted(_ path: String) -> String {
+    static func quoted(_ path: String) -> String {
         "\"" + path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+    }
+}
+
+/// Quits Pages, Keynote and Numbers after they sit idle, so they don't hold on to memory.
+/// Only apps Halu started itself are quit, and never while they have documents open,
+/// so an app you were already using is left alone. Back-to-back conversions keep the app warm.
+@MainActor
+final class IWorkLifecycle {
+    static let shared = IWorkLifecycle()
+    static let idleDelay: Duration = .seconds(90)
+
+    private var launchedByUs: Set<IWork.App> = []
+    private var inUse: [IWork.App: Int] = [:]
+    private var quitTasks: [IWork.App: Task<Void, Never>] = [:]
+
+    func begin(_ app: IWork.App) {
+        quitTasks[app]?.cancel()
+        quitTasks[app] = nil
+        inUse[app, default: 0] += 1
+    }
+
+    func markLaunchedByUs(_ app: IWork.App) { launchedByUs.insert(app) }
+
+    func end(_ app: IWork.App) {
+        inUse[app, default: 1] -= 1
+        guard inUse[app] == 0, launchedByUs.contains(app) else { return }
+        quitTasks[app] = Task {
+            try? await Task.sleep(for: Self.idleDelay)
+            guard !Task.isCancelled else { return }
+            await self.quitIfIdle(app)
+        }
+    }
+
+    /// Called when Halu itself quits. `terminate()` is a normal Quit, so an app with unsaved work still asks to save.
+    func quitAllNow() {
+        for app in launchedByUs where inUse[app, default: 0] == 0 {
+            NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).first?.terminate()
+        }
+        launchedByUs.removeAll()
+    }
+
+    private func quitIfIdle(_ app: IWork.App) async {
+        guard inUse[app, default: 0] == 0,
+              let running = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).first else {
+            launchedByUs.remove(app)
+            return
+        }
+        // Someone opened a document in it meanwhile: it's theirs now.
+        let count = "tell application id \"\(app.bundleID)\" to count documents"
+        if let output = try? await Shell.output("/usr/bin/osascript", ["-e", count]), Int(output) ?? 1 > 0 {
+            launchedByUs.remove(app)
+            return
+        }
+        running.terminate()
+        launchedByUs.remove(app)
     }
 }
 
