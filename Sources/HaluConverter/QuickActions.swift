@@ -1,6 +1,6 @@
 import AppKit
 
-/// One slice of the wheel: a tool plus preset settings.
+/// One petal of the wheel: a tool plus preset settings.
 struct QuickAction: Identifiable {
     let id = UUID()
     let title: String
@@ -8,20 +8,23 @@ struct QuickAction: Identifiable {
     let tool: Tool
     var configure: (inout ToolSettings) -> Void = { _ in }
 
-    /// Shown in the wheel's center while hovering this slice.
+    /// Shown in the wheel's center while hovering this petal.
     var caption: String {
         switch tool {
-        case .convertImage, .convertVideo, .convertAudio: "Convert to \(title)"
+        case .convertImage, .convertVideo, .convertAudio, .convertDocument, .convertPresentation,
+             .convertSpreadsheet, .convertSubtitle: "Convert to \(title)"
         case .pdfToImages: "Pages to \(title)"
         case .compressPDF: title == "Light" ? "Compress, keep text" : "Compress PDF"
         case .compressVideo: "Compress to \(title)"
+        case .makeArchive: "Pack into \(title)"
         default: tool.title
         }
     }
 
-    /// Actions offered for the dragged files, at most 8 so slices stay readable.
+    /// Actions offered for the dragged files, at most 8 so petals stay readable.
     static func actions(for files: [InputFile]) -> [QuickAction] {
         let kinds = Set(files.map(\.kind))
+        let sourceExt = files.count == 1 ? files[0].url.pathExtension.lowercased() : ""
         var actions: [QuickAction]
 
         if kinds == [.image] {
@@ -51,8 +54,7 @@ struct QuickAction: Identifiable {
         } else if kinds == [.image, .pdf] {
             actions = [QuickAction(title: "Merge", symbol: "doc.on.doc", tool: .mergePDF)]
         } else if kinds == [.video] {
-            let isMP4 = files.count == 1 && files[0].url.pathExtension.lowercased() == "mp4"
-            let container: VideoContainer = isMP4 ? .mov : .mp4
+            let container: VideoContainer = sourceExt == "mp4" ? .mov : .mp4
             actions = [
                 QuickAction(title: "720p", symbol: "film", tool: .compressVideo) { $0.videoPreset = .p720 },
                 QuickAction(title: "HEVC", symbol: "film.stack", tool: .compressVideo) { $0.videoPreset = .hevc1080 },
@@ -61,14 +63,83 @@ struct QuickAction: Identifiable {
                 QuickAction(title: "Audio", symbol: "waveform", tool: .extractAudio),
             ]
         } else if kinds == [.audio] {
-            let source = files.count == 1 ? files[0].url.pathExtension.lowercased() : ""
-            actions = AudioFormat.allCases.filter { $0.rawValue != source }.map { format in
-                QuickAction(title: format.label, symbol: "music.note", tool: .convertAudio) { $0.audioFormat = format }
+            actions = AudioFormat.allCases.filter { $0.fileExtension != sourceExt }.map { format in
+                QuickAction(title: format.label, symbol: format == .flac || format == .alac ? "waveform.badge.plus" : "music.note",
+                            tool: .convertAudio) { $0.audioFormat = format }
+            }
+        } else if kinds == [.document] {
+            let symbols: [DocumentFormat: String] = [.pdf: "doc.richtext", .docx: "doc.text", .pages: "doc.append", .md: "number",
+                                                     .txt: "text.alignleft", .rtf: "textformat", .html: "chevron.left.forwardslash.chevron.right",
+                                                     .odt: "doc", .doc: "doc.text"]
+            actions = [DocumentFormat.pdf, .docx, .pages, .md, .txt, .rtf, .html, .odt]
+                .filter { $0.rawValue != sourceExt && !(sourceExt == "markdown" && $0 == .md) }
+                .map { format in
+                    QuickAction(title: format.label, symbol: symbols[format] ?? "doc", tool: .convertDocument) { $0.documentFormat = format }
+                }
+        } else if kinds == [.presentation] {
+            let symbols: [SlidesFormat: String] = [.pdf: "doc.richtext", .pptx: "rectangle.on.rectangle.angled", .key: "play.rectangle",
+                                                   .png: "photo.stack", .jpeg: "photo.stack"]
+            actions = SlidesFormat.allCases.filter { $0.rawValue != sourceExt }.map { format in
+                QuickAction(title: format.label.replacingOccurrences(of: " slides", with: ""), symbol: symbols[format] ?? "doc",
+                            tool: .convertPresentation) { $0.slidesFormat = format }
+            }
+        } else if kinds == [.spreadsheet] {
+            let symbols: [SheetFormat: String] = [.xlsx: "tablecells", .numbers: "chart.bar.doc.horizontal", .csv: "list.bullet.rectangle",
+                                                  .tsv: "list.bullet.rectangle", .pdf: "doc.richtext"]
+            actions = SheetFormat.allCases.filter { $0.rawValue != sourceExt }.map { format in
+                QuickAction(title: format.label, symbol: symbols[format] ?? "tablecells", tool: .convertSpreadsheet) { $0.sheetFormat = format }
+            }
+        } else if kinds == [.archive] {
+            actions = [QuickAction(title: "Extract", symbol: "shippingbox.and.arrow.backward", tool: .extractArchive)]
+        } else if kinds == [.subtitle] {
+            actions = SubtitleFormat.allCases.filter { $0.rawValue != sourceExt }.map { format in
+                QuickAction(title: format.label, symbol: "captions.bubble", tool: .convertSubtitle) { $0.subtitleFormat = format }
+            }
+        } else if kinds == [.folder] {
+            actions = ArchiveFormat.allCases.map { format in
+                QuickAction(title: format.label, symbol: "archivebox", tool: .makeArchive) { $0.archiveFormat = format }
             }
         } else {
             actions = []
         }
         return Array(actions.prefix(8))
+    }
+}
+
+/// Small "moons" around the wheel: things you can do with any file.
+enum FileAction: String, CaseIterable, Identifiable {
+    case airDrop, zip, copyPath
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .airDrop: "AirDrop"
+        case .zip: "ZIP"
+        case .copyPath: "Copy Path"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .airDrop: "dot.radiowaves.left.and.right"
+        case .zip: "archivebox"
+        case .copyPath: "link"
+        }
+    }
+
+    @MainActor
+    func perform(on urls: [URL]) {
+        switch self {
+        case .airDrop:
+            NSApp.activate(ignoringOtherApps: true)
+            NSSharingService(named: .sendViaAirDrop)?.perform(withItems: urls)
+        case .zip:
+            AppModel.shared.runQuick(QuickAction(title: "ZIP", symbol: symbol, tool: .makeArchive) { $0.archiveFormat = .zip }, urls: urls)
+        case .copyPath:
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(urls.map(\.path).joined(separator: "\n"), forType: .string)
+            ToastController.shared.flash(urls.count == 1 ? "Path copied" : "\(urls.count) paths copied", symbol: "link")
+        }
     }
 }
 

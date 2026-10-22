@@ -114,9 +114,9 @@ struct WheelHint: View {
             MiniWheel()
                 .frame(width: 54, height: 54)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Quick wheel: works from anywhere")
+                Text("You don't need this window")
                     .font(.headline)
-                Text("Start dragging any file in Finder or on the Desktop, then hold **\(trigger.label)**. A wheel pops up under the cursor. Drop the file on an action and the result is saved next to the original.")
+                Text("Drag any file and hold **\(trigger.label)**: a flower of actions blooms under the cursor. Drop on a petal and the result lands next to the original. Or right-click a file → **Quick Actions / Services → Convert with Halu**.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
