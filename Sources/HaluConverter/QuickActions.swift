@@ -17,6 +17,13 @@ struct QuickAction: Identifiable {
         case .compressPDF: title == "Light" ? "Compress, keep text" : "Compress PDF"
         case .compressVideo: "Compress to \(title)"
         case .makeArchive: "Pack into \(title)"
+        case .makeSketch:
+            switch title {
+            case "Colours": "DXF, a file per colour"
+            case "Pieces": "DXF, a file per piece"
+            case "Lines": "DXF with polylines"
+            default: "Sketch for CAD (DXF)"
+            }
         default: tool.title
         }
     }
@@ -39,6 +46,7 @@ struct QuickAction: Identifiable {
                     $0.quality = 0.9; $0.resizeEnabled = true; $0.maxDimension = 2048
                 },
                 QuickAction(title: files.count == 1 ? "PDF" : "One PDF", symbol: "doc.richtext", tool: .mergePDF),
+                QuickAction(title: "DXF", symbol: "pencil.and.outline", tool: .makeSketch),
             ]
         } else if kinds == [.pdf] {
             actions = [
@@ -47,10 +55,20 @@ struct QuickAction: Identifiable {
                 QuickAction(title: "Split", symbol: "scissors", tool: .splitPDF) { $0.splitMode = .everyPage },
                 QuickAction(title: "PNG", symbol: "photo.stack", tool: .pdfToImages) { $0.pdfImageFormat = .png },
                 QuickAction(title: "JPEG", symbol: "photo.stack", tool: .pdfToImages) { $0.pdfImageFormat = .jpeg },
+                QuickAction(title: "DXF", symbol: "pencil.and.outline", tool: .makeSketch),
             ]
             if files.count > 1 {
                 actions.insert(QuickAction(title: "Merge", symbol: "doc.on.doc", tool: .mergePDF), at: 0)
             }
+        } else if kinds == [.vector] {
+            actions = [
+                QuickAction(title: "DXF", symbol: "pencil.and.outline", tool: .makeSketch),
+                QuickAction(title: "Colours", symbol: "paintpalette", tool: .makeSketch) { $0.sketchSplit = .byColor },
+                QuickAction(title: "Pieces", symbol: "square.on.square.dashed", tool: .makeSketch) { $0.sketchSplit = .byPiece },
+                QuickAction(title: "Lines", symbol: "point.topleft.down.to.point.bottomright.curvepath", tool: .makeSketch) {
+                    $0.sketchCurves = .polylines
+                },
+            ]
         } else if kinds == [.image, .pdf] {
             actions = [QuickAction(title: "Merge", symbol: "doc.on.doc", tool: .mergePDF)]
         } else if kinds == [.video] {

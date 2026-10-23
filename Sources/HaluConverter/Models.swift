@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum FileKind: Hashable {
-    case image, pdf, video, audio, document, presentation, spreadsheet, archive, subtitle, folder, other
+    case image, vector, pdf, video, audio, document, presentation, spreadsheet, archive, subtitle, folder, other
 
     private static let byExtension: [String: FileKind] = {
         var map: [String: FileKind] = [:]
@@ -11,6 +11,7 @@ enum FileKind: Hashable {
         for ext in ["xls", "xlsx", "csv", "tsv", "numbers", "ods"] { map[ext] = .spreadsheet }
         for ext in ["zip", "tar", "gz", "tgz", "bz2", "xz", "rar", "7z"] { map[ext] = .archive }
         for ext in ["srt", "vtt"] { map[ext] = .subtitle }
+        for ext in ["svg", "ai"] { map[ext] = .vector }
         return map
     }()
 
@@ -30,6 +31,7 @@ enum FileKind: Hashable {
     var label: String {
         switch self {
         case .image: "image"
+        case .vector: "vector"
         case .pdf: "PDF"
         case .video: "video"
         case .audio: "audio"
@@ -72,6 +74,7 @@ enum Tool: String, CaseIterable, Identifiable {
     case convertDocument, convertPresentation, convertSpreadsheet
     case makeArchive, extractArchive
     case convertSubtitle
+    case makeSketch
 
     var id: String { rawValue }
 
@@ -94,6 +97,7 @@ enum Tool: String, CaseIterable, Identifiable {
         case .makeArchive: "Make Archive"
         case .extractArchive: "Extract Archive"
         case .convertSubtitle: "Convert Subtitles"
+        case .makeSketch: "Sketch for CAD"
         }
     }
 
@@ -116,6 +120,7 @@ enum Tool: String, CaseIterable, Identifiable {
         case .makeArchive: "ZIP or TAR.GZ"
         case .extractArchive: "ZIP, RAR, 7Z, TAR…"
         case .convertSubtitle: "SRT ⇄ VTT, TXT"
+        case .makeSketch: "SVG, PDF, PNG → DXF"
         }
     }
 
@@ -138,6 +143,7 @@ enum Tool: String, CaseIterable, Identifiable {
         case .makeArchive: "archivebox"
         case .extractArchive: "shippingbox.and.arrow.backward"
         case .convertSubtitle: "captions.bubble"
+        case .makeSketch: "pencil.and.outline"
         }
     }
 
@@ -152,7 +158,7 @@ enum Tool: String, CaseIterable, Identifiable {
     var category: ToolCategory {
         switch self {
         case .convertImage, .pdfToImages, .convertVideo, .videoToGIF, .extractAudio, .convertAudio,
-             .convertDocument, .convertPresentation, .convertSpreadsheet, .convertSubtitle: .convert
+             .convertDocument, .convertPresentation, .convertSpreadsheet, .convertSubtitle, .makeSketch: .convert
         case .compressImage, .compressPDF, .compressVideo, .makeArchive: .compress
         case .mergePDF, .splitPDF, .extractArchive: .organize
         }
@@ -187,6 +193,8 @@ enum Tool: String, CaseIterable, Identifiable {
             return kinds == [.archive]
         case .convertSubtitle:
             return kinds == [.subtitle]
+        case .makeSketch:
+            return kinds.isSubset(of: [.vector, .pdf, .image])
         }
     }
 }
@@ -232,6 +240,12 @@ struct ToolSettings {
     var sheetFormat: SheetFormat = .xlsx
     var archiveFormat: ArchiveFormat = .zip
     var subtitleFormat: SubtitleFormat = .srt
+    var sketchFitWidth = true
+    var sketchWidth: Double = 100
+    var sketchSplit: SketchSplit = .oneFile
+    var sketchCurves: DXFCurveStyle = .smooth
+    var traceDetail: Double = 0.5
+    var traceColors = true
 }
 
 enum HaluError: LocalizedError {

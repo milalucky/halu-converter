@@ -194,8 +194,10 @@ struct JobRow: View {
         case .done:
             HStack(spacing: 4) {
                 Text(job.tool.title + " ·")
-                if job.tool == .splitPDF || job.tool == .pdfToImages {
+                if job.tool == .splitPDF || job.tool == .pdfToImages || (job.tool == .makeSketch && job.outputs.count > 1) {
                     Text("\(job.outputs.count - 1) files")
+                } else if job.tool == .makeSketch {
+                    Text(job.outputSize.byteString)
                 } else {
                     Text("\(job.inputSize.byteString) → \(job.outputSize.byteString)")
                     if job.inputSize > 0 {

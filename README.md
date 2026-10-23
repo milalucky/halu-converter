@@ -24,6 +24,9 @@ The moons under the flower work for any file: **AirDrop**, **ZIP** and **Copy Pa
 | Spreadsheets | Excel, Numbers, CSV, TSV, PDF |
 | Archives | Extract ZIP, RAR, 7Z, TAR, GZ; pack folders into ZIP or TAR.GZ |
 | Subtitles | SRT, VTT, TXT |
+| Logos & drawings | SVG, PDF, Illustrator (.ai), PNG/JPEG → DXF sketch for CAD |
+
+**DXF sketches** open in Shapr3D, Fusion, Onshape and other CAD apps as editable sketches (each closed outline is its own region, ready to extrude). SVG, PDF and .ai keep their exact curves (cubic splines, circles as circles); PNG/JPEG are traced (background and up to 8 colours found automatically, sharp corners kept). Options: width in mm, one file / a file per colour / a file per piece, smooth splines or polylines. Text must be converted to outlines first.
 
 Office and text formats convert natively. Pages, Keynote and Numbers files (and Word → PDF, for the best layout) are converted by the iWork apps in the background; macOS asks once for permission to control them.
 
@@ -43,5 +46,6 @@ On first launch the app adds itself to Login Items (toggle in the menu bar icon)
 - `Wheel.swift`: drag detection (`DragWatcher` polls the system drag pasteboard, no Accessibility permission needed), the floating panel, the petal flower.
 - `QuickActions.swift`: which petals and moons each file type gets.
 - `ImageEngine`, `PDFEngine`, `MediaEngine`, `DocumentEngine` (incl. iWork automation, Markdown), `ArchiveEngine` (archives, subtitles): the processing.
+- `SketchEngine` (→ DXF): `SVGImporter`, `PDFVectorImporter` (CGPDFScanner), `Tracer` (bitmap tracing), `Sketch` (geometry, pieces), `DXFWriter` (AC1015, mm).
 - `Toast.swift`: the progress card at the bottom of the screen.
 - `AppModel.swift`, `ContentView.swift`, `OptionsCard.swift`: the full window.

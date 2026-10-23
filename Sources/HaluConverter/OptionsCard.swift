@@ -208,7 +208,66 @@ struct OptionsCard: View {
         case .convertSubtitle:
             formatRow(selection: s.subtitleFormat, cases: SubtitleFormat.allCases, label: \.label)
             hint("TXT keeps only the spoken lines, without timings.")
+
+        case .makeSketch:
+            GridRow {
+                Text("Size").foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    Toggle("Set width", isOn: s.sketchFitWidth)
+                    if s.wrappedValue.sketchFitWidth {
+                        TextField("", value: s.sketchWidth, format: .number.precision(.fractionLength(0...2)))
+                            .textFieldStyle(.roundedBorder)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 70)
+                        Text("mm").foregroundStyle(.secondary)
+                    }
+                }
+            }
+            GridRow {
+                Text("Files").foregroundStyle(.secondary)
+                Picker("", selection: s.sketchSplit) {
+                    ForEach(SketchSplit.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 360)
+            }
+            GridRow {
+                Text("Curves").foregroundStyle(.secondary)
+                Picker("", selection: s.sketchCurves) {
+                    ForEach(DXFCurveStyle.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 260)
+            }
+            if model.files.contains(where: { $0.kind == .image }) {
+                GridRow {
+                    Text("Colours").foregroundStyle(.secondary)
+                    Picker("", selection: s.traceColors) {
+                        Text("Separate").tag(true)
+                        Text("One shape").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(maxWidth: 220)
+                }
+                sliderRow("Detail", value: s.traceDetail, range: 0...1, step: 0.05, label: "\(Int(s.wrappedValue.traceDetail * 100))%")
+                hint("Pictures are traced: flat logos on a plain or transparent background work best. Lower detail gives smoother curves.")
+            }
+            hint(sketchHint(s.wrappedValue))
         }
+    }
+
+    private func sketchHint(_ s: ToolSettings) -> String {
+        let split: String
+        switch s.sketchSplit {
+        case .oneFile: split = "Each colour is its own layer, each closed outline its own region."
+        case .byColor: split = "Every colour goes into its own DXF, in a new folder."
+        case .byPiece: split = "Every separate shape (with its holes) goes into its own DXF, in a new folder. Pieces keep their positions."
+        }
+        let curves = s.sketchCurves == .smooth ? "" : " Polylines are for apps that don't read splines."
+        return "Opens in Shapr3D, Fusion and other CAD apps as an editable sketch. " + split + curves
     }
 
     private func audioHint(_ format: AudioFormat) -> String {

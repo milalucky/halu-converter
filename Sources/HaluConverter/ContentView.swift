@@ -319,7 +319,7 @@ struct WorkspaceView: View {
 
     private var summary: String {
         let counts = Dictionary(grouping: model.files, by: \.kind).mapValues(\.count)
-        let parts = [FileKind.image, .pdf, .video, .audio].compactMap { kind -> String? in
+        let parts = [FileKind.image, .vector, .pdf, .video, .audio].compactMap { kind -> String? in
             guard let n = counts[kind] else { return nil }
             let noun = kind == .pdf ? "PDF" : kind.label
             return "\(n) \(noun)\(n == 1 || kind == .audio ? "" : "s")"
