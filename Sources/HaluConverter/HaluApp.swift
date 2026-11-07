@@ -98,6 +98,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        // HALU_DEMO_WINDOW="/path/a:/path/b" shows the full window with those files; HALU_DEMO_TOAST="/path/photo.png" compresses it.
+        if let paths = ProcessInfo.processInfo.environment["HALU_DEMO_WINDOW"] {
+            MainActor.assumeIsolated {
+                AppModel.shared.add(paths.split(separator: ":").map { URL(fileURLWithPath: String($0)) })
+                let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1040, height: 760),
+                                      styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
+                window.titlebarAppearsTransparent = true
+                window.titleVisibility = .hidden
+                window.contentView = NSHostingView(rootView: ContentView().environment(AppModel.shared))
+                window.center()
+                window.makeKeyAndOrderFront(nil)
+            }
+        }
+        if let path = ProcessInfo.processInfo.environment["HALU_DEMO_TOAST"] {
+            MainActor.assumeIsolated {
+                let url = URL(fileURLWithPath: path)
+                if let action = QuickAction.actions(for: [InputFile(url: url)]).first(where: { $0.tool == .compressImage }) {
+                    AppModel.shared.runQuick(action, urls: [url])
+                }
+            }
+        }
         #endif
     }
 

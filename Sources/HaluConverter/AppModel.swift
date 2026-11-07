@@ -183,6 +183,8 @@ enum Processor {
             return try await ArchiveEngine.extract(url, outputDir: outputDir)
         case .convertSubtitle:
             return [try SubtitleEngine.convert(url, to: s.subtitleFormat, outputDir: outputDir)]
+        case .makeSketch:
+            return try SketchEngine.toDXF(url, settings: s, outputDir: outputDir)
         }
     }
 }

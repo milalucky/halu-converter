@@ -193,8 +193,10 @@ private struct ToastJobRow: View {
         case .running:
             Text("\(job.tool.title) · \(Int(job.progress * 100))%")
         case .done:
-            if [.splitPDF, .pdfToImages, .convertPresentation, .extractArchive].contains(job.tool), job.outputs.count > 1 {
+            if [.splitPDF, .pdfToImages, .convertPresentation, .extractArchive, .makeSketch].contains(job.tool), job.outputs.count > 1 {
                 Text("\(job.outputs.count - 1) files in a new folder")
+            } else if job.tool == .makeSketch {
+                Text("Sketch saved next to the original")
             } else if job.inputSize > 0 && job.outputSize > 0 {
                 let change = Double(job.outputSize - job.inputSize) / Double(job.inputSize) * 100
                 Text("\(job.inputSize.byteString) → \(job.outputSize.byteString)  ")
